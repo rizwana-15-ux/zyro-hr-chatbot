@@ -10,17 +10,25 @@ st.set_page_config(page_title="Zyro Dynamics HR Help Desk", page_icon="🏢")
 st.title("🏢 Zyro Dynamics HR Help Desk")
 st.write("Ask any question regarding company policies, handbooks, or benefits.")
 
-# 1. Fetch the API key from Streamlit Secrets
+# Fetch the API key from Streamlit Secrets
 groq_api_key = st.secrets.get("GROQ_API_KEY")
 
 @st.cache_resource
 def init_rag():
     corpus_path = "./zyro-dynamics-hr-corpus"
+    
+    # 1. Safety check for folder
     if not os.path.exists(corpus_path):
-        os.makedirs(corpus_path)
+        st.error(f"Folder '{corpus_path}' not found! Please create it in your repository.")
+        st.stop()
     
     loader = PyPDFDirectoryLoader(corpus_path)
     documents = loader.load()
+    
+    # 2. Safety check for documents
+    if not documents:
+        st.error(f"No PDF files found in '{corpus_path}'. Please upload your HR documents there.")
+        st.stop()
     
     splitter = RecursiveCharacterTextSplitter(chunk_size=750, chunk_overlap=75)
     chunks = splitter.split_documents(documents)
@@ -29,7 +37,11 @@ def init_rag():
     vectorstore = FAISS.from_documents(chunks, embeddings)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     
-    # 2. Pass the API key here
+    # Initialize Groq
+    if not groq_api_key:
+        st.error("GROQ_API_KEY not set in Secrets!")
+        st.stop()
+        
     llm = ChatGroq(
         groq_api_key=groq_api_key, 
         model="llama-3.3-70b-versatile", 
@@ -37,14 +49,14 @@ def init_rag():
     )
     return retriever, llm
 
-# 3. Initialization with safety check
-if not groq_api_key:
-    st.error("GROQ_API_KEY is missing! Please set it in Streamlit Secrets.")
-    st.stop()
-
+# Run the app
 try:
     retriever, llm = init_rag()
-    # Add your chat logic here (st.chat_input, etc.)
-    st.success("System Initialized!")
+    st.success("System Initialized! Ready to answer.")
+    # Add your chat input logic here
+    user_query = st.chat_input("Ask a question...")
+    if user_query:
+        st.write(f"You asked: {user_query}")
+        # Add RAG retrieval and generation logic here
 except Exception as e:
-    st.error(f"Initialization Error: {e}")
+    st.error(f"An error occurred: {e}")
